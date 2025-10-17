@@ -130,7 +130,7 @@ def generate_html(data):
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Monkeytype Leaderboard</title>
+<title>TYPENV</title>
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono&display=swap" rel="stylesheet">
 <style>
 body { font-family: "Roboto Mono", monospace; background: #1a1a1a; color: #e0e0e0; padding: 2rem; }
@@ -146,7 +146,7 @@ tr:hover { background: #333; }
 </style>
 </head>
 <body>
-<h1>Custom Monkeytype Leaderboard</h1>
+<h1>TypeNV</h1>
 '''
 
     for cat, _ in CATEGORIES:
