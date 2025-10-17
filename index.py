@@ -169,6 +169,3 @@ def leaderboard():
         CACHE["timestamp"] = now
     return Response(generate_html(CACHE["data"]), mimetype="text/html")
 
-# ------------------- RUN -------------------
-if __name__ == "__main__":
-    app.run(debug=True, port=8000)
