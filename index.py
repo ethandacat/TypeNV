@@ -4,10 +4,11 @@ import time
 
 app = Flask(__name__)
 
-USERS_URL = "https://ethan-codes.com/pub/ownerapi.php"  # your PHP JSON API
+# ------------------- CONFIG -------------------
+USERS_URL = "https://ethan-codes.com/pub/usernames.json"  # your PHP JSON API
 OWNER_CODE = "ethandacat"
 CACHE = {"timestamp": 0, "data": None}
-REFRESH_INTERVAL = 600  # 5 minutes
+REFRESH_INTERVAL = 300  # 5 minutes
 
 CATEGORIES = [
     ("Overall", None),
@@ -19,8 +20,10 @@ CATEGORIES = [
     ("30 Seconds", "30"),
     ("60 Seconds", "60"),
     ("120 Seconds", "120"),
-    ("XP", "xp")
+    ("XP", "xp"),
 ]
+
+MIN_CATEGORIES_FOR_OVERALL = 3  # Minimum categories needed for Overall
 
 # ------------------- USER STORAGE -------------------
 def load_usernames():
@@ -42,15 +45,18 @@ def fetch_profile(username):
     url = f"https://api.monkeytype.com/users/{username}/profile"
     try:
         r = requests.get(url, timeout=5)
-        if r.status_code != 200: return None
+        if r.status_code != 200:
+            return None
         return r.json().get("data")
     except:
         return None
 
 def best_attempt(arr):
-    if not arr: return None
+    if not arr:
+        return None
     arr = [a for a in arr if a.get("wpm") is not None]
-    if not arr: return None
+    if not arr:
+        return None
     return max(arr, key=lambda x: x["wpm"])
 
 # ------------------- LEADERBOARD -------------------
@@ -62,31 +68,34 @@ def fetch_leaderboard():
         data = fetch_profile(user)
         if not data:
             continue
+
         personalBests = data.get("personalBests", {})
         details = data.get("details", {})
 
         cat_results = {}
-        # Collect all categories except Overall and XP
         for name, key in CATEGORIES[1:-1]:
-            k = str(key)
-            cat_data = personalBests.get("words", {}).get(k, []) or personalBests.get("time", {}).get(k, [])
+            cat_data = []
+            if key in personalBests.get("words", {}):
+                cat_data = personalBests["words"][key]
+            elif key in personalBests.get("time", {}):
+                cat_data = personalBests["time"][key]
+
             best = best_attempt(cat_data)
             if best:
                 cat_results[name] = {"wpm": best["wpm"], "acc": best["acc"]}
 
-        # Skip users with no completed categories
-        if not cat_results:
-            continue
-
-        # Overall: average of whatever categories exist
-        avg_wpm = round(sum(v["wpm"] for v in cat_results.values()) / len(cat_results), 2)
-        avg_acc = round(sum(v["acc"] for v in cat_results.values()) / len(cat_results), 2)
-        leaderboard["Overall"].append({
-            "username": data.get("name", user),
-            "wpm": avg_wpm,
-            "acc": avg_acc,
-            "bio": details.get("bio","")
-        })
+        # Overall
+        if len(cat_results) >= MIN_CATEGORIES_FOR_OVERALL:
+            avg_wpm = round(sum(v["wpm"] for v in cat_results.values()) / len(cat_results), 2)
+            avg_acc = round(sum(v["acc"] for v in cat_results.values()) / len(cat_results), 2)
+            dq = False
+            leaderboard["Overall"].append({
+                "username": data.get("name", user),
+                "wpm": avg_wpm,
+                "acc": avg_acc,
+                "bio": details.get("bio", ""),
+                "dq": dq
+            })
 
         # Individual categories
         for k, v in cat_results.items():
@@ -94,7 +103,7 @@ def fetch_leaderboard():
                 "username": data.get("name", user),
                 "wpm": v["wpm"],
                 "acc": v["acc"],
-                "bio": details.get("bio","")
+                "bio": details.get("bio", "")
             })
 
         # XP
@@ -102,21 +111,44 @@ def fetch_leaderboard():
             "username": data.get("name", user),
             "wpm": data.get("xp", 0),
             "acc": "",
-            "bio": details.get("bio","")
+            "bio": details.get("bio", "")
         })
 
-    # sort each category
+    # Sort each category
     for cat, entries in leaderboard.items():
-        leaderboard[cat] = sorted(entries, key=lambda x: x["wpm"], reverse=True)
+        leaderboard[cat] = sorted(
+            entries,
+            key=lambda x: x["wpm"] if isinstance(x["wpm"], (int, float)) else -1,
+            reverse=True
+        )
 
     return leaderboard
 
 # ------------------- HTML -------------------
 def generate_html(data):
-    html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Monkeytype Leaderboard</title>'
-    html += '<link href="https://fonts.googleapis.com/css2?family=Roboto+Mono&display=swap" rel="stylesheet">'
-    html += '<style>body{font-family:"Roboto Mono",monospace;background:#1a1a1a;color:#e0e0e0;padding:2rem}h1{text-align:center;color:#ffb86c}.category{margin:2rem 0}table{width:100%;border-collapse:collapse;margin-top:.5rem}th,td{padding:.5rem 1rem;border-bottom:1px solid #333;text-align:left}th{background:#282828;color:#ff79c6}tr:hover{background:#333}.wpm{color:#8be9fd;font-weight:bold}.acc{color:#50fa7b}.bio{font-size:.8rem;color:#bbb}</style></head><body>'
-    html += '<h1>Custom Monkeytype Leaderboard</h1>'
+    html = '''<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Monkeytype Leaderboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Mono&display=swap" rel="stylesheet">
+<style>
+body { font-family: "Roboto Mono", monospace; background: #1a1a1a; color: #e0e0e0; padding: 2rem; }
+h1 { text-align: center; color: #ffb86c; }
+.category { margin: 2rem 0; }
+table { width: 100%; border-collapse: collapse; margin-top: .5rem; }
+th, td { padding: .5rem 1rem; border-bottom: 1px solid #333; text-align: left; }
+th { background: #282828; color: #ff79c6; }
+tr:hover { background: #333; }
+.wpm { color: #8be9fd; font-weight: bold; }
+.acc { color: #50fa7b; }
+.bio { font-size: .8rem; color: #bbb; }
+</style>
+</head>
+<body>
+<h1>Custom Monkeytype Leaderboard</h1>
+'''
+
     for cat, _ in CATEGORIES:
         html += f"<div class='category'><h2>{cat}</h2><table><tr><th>#</th><th>User</th><th>WPM / XP</th><th>Accuracy</th></tr>"
         for idx, e in enumerate(data.get(cat, []), 1):
@@ -124,16 +156,17 @@ def generate_html(data):
             bio = f"<div class='bio'>{e['bio']}</div>" if e['bio'] else ''
             html += f"<tr><td>{idx}</td><td>{e['username']}{bio}</td><td class='wpm'>{e['wpm']}</td><td class='acc'>{acc}</td></tr>"
         html += "</table></div>"
-    html += "Leaderboards update every 10 minutes"
+
     html += "</body></html>"
     return html
 
 # ------------------- ROUTES -------------------
-@app.route("/owner", methods=["GET","POST"])
+@app.route("/owner", methods=["GET", "POST"])
 def owner():
     if request.method == "POST":
-        code = request.form.get("code","")
-        new_user = request.form.get("username","").strip()
+        code = request.form.get("code", "")
+        new_user = request.form.get("username", "").strip()
+
         if code != OWNER_CODE:
             return "Invalid code", 403
         if not new_user:
@@ -147,19 +180,18 @@ def owner():
         if new_user not in usernames:
             usernames.append(new_user)
             save_usernames(usernames)
-            # clear cache so leaderboard refreshes
-            CACHE["data"] = None
+            CACHE["data"] = None  # Clear cache
             return f"User {new_user} added!", 200
         else:
             return f"User {new_user} already exists.", 200
 
-    return """
-    <form method="POST">
-        Code: <input name="code"><br>
-        Username: <input name="username"><br>
-        <input type="submit" value="Add User">
-    </form>
-    """
+    return '''
+<form method="POST">
+Code: <input name="code"><br>
+Username: <input name="username"><br>
+<input type="submit" value="Add User">
+</form>
+'''
 
 @app.route("/")
 def leaderboard():
@@ -168,4 +200,3 @@ def leaderboard():
         CACHE["data"] = fetch_leaderboard()
         CACHE["timestamp"] = now
     return Response(generate_html(CACHE["data"]), mimetype="text/html")
-
