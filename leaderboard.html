@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>tnv</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+--bg: #181a1b;    /* Deep black, strong dark baseline */
+--card: #232323;  /* Slightly lighter, clear card separation */
+--accent: #FFD700; /* Brighter, richer yellow for true Serika vibe */
+--button-background: #333; /* Example yellow */
+--text: #F6F6F6;   /* Lighter, improved contrast for readability */
+--subtext: #A8A8A8;/* Soft neutral for secondary text, avoids being too dark */
+--hover: #292929;  /* Gentle hover, noticeable but not harsh */
+--word: #8BE9FD;   /* Accent cyan for current word, unchanged */
+--acc: #50FA7B;    /* Accent green for accuracy, unchanged */
+}
+body { font-family: "Roboto Mono", monospace; background: var(--bg); color: var(--text); margin:0; padding:2rem; text-align:center;}
+h1 {
+  text-align: center;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 2rem;
+  margin-bottom: 2rem;
+  border-right: .12em solid orange; /* The caret/cursor */
+  animation: blink-caret 0.7s step-end infinite;
+  white-space: nowrap;
+  width: fit-content;     /* Add this for a moving caret */
+  margin-left: auto;      /* Center h1 horizontally when using fit-content */
+  margin-right: auto;
+}
+
+
+@keyframes blink-caret {
+  from, to { border-color: transparent; }
+  50% { border-color: orange; }
+}
+
+.tabs-container, .submenu-container {
+  display: inline-flex;
+  position: relative;
+  background: var(--card);
+  border-radius: 999px;
+  padding: 2px;
+  overflow: hidden;
+  margin-bottom:1rem;
+}
+.tab, .subtab {
+  padding: 0.6rem 1.5rem;
+  border-radius: 999px;
+  position: relative;
+  z-index: 1;
+  cursor: pointer;
+  transition: color 0.25s ease;
+  font-weight: 500;
+  color: var(--text);
+  user-select: none;
+  white-space: nowrap;
+}
+.tabs-container .highlight, .submenu-container .highlight {
+  position: absolute;
+  top:0; left:0;
+  width:0; height:100%;
+  background: var(--button-background);
+  border-radius: 999px;
+  transition: left 0.25s ease, width 0.25s ease;
+  z-index:0;
+}
+.category {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  display: none;
+  background: var(--card);
+  border-radius:10px;
+  padding:1.5rem;
+  box-shadow:0 0 15px rgba(0,0,0,0.4);
+  max-width:900px;
+  margin:0 auto 1rem;
+}
+.category.show { display:block; opacity:1; transform: translateY(0); }
+h2 { color: var(--accent); text-align:center; font-size:1.3rem; margin-bottom:1rem; }
+table { width:100%; border-collapse:collapse; }
+th, td { padding:.7rem 1rem; text-align:left; }
+th { color: var(--subtext); border-bottom:1px solid #333; text-transform:uppercase; font-size:.8rem; letter-spacing:.5px; }
+tr:hover { background: var(--hover); }
+.wpm { color: var(--word); font-weight:500; }
+.acc { color: var(--acc); }
+.bio { font-size:.8rem; color: var(--subtext); margin-top:.3rem; }
+</style>
+</head>
+<body>
+<h1 id="typewriter"></h1>
+
+<div class="tabs-container" id="main-tabs">
+  <div class="highlight" id="main-highlight"></div>
+  <div class="tab" data-cat="Overall" onclick="selectMainTab(this)">Overall</div>
+  <div class="tab" data-cat="XP" onclick="selectMainTab(this)">XP</div>
+  <div class="tab" data-cat="Words" onclick="selectMainTab(this)">Words</div>
+  <div class="tab" data-cat="Time" onclick="selectMainTab(this)">Time</div>
+</div>
+
+<br>
+
+<div class="submenu-container" id="Words-submenu">
+  <div class="highlight" id="Words-highlight"></div>
+  <div class="subtab" data-subcat="10 Words" onclick="selectSubTab(this)">10</div>
+  <div class="subtab" data-subcat="25 Words" onclick="selectSubTab(this)">25</div>
+  <div class="subtab" data-subcat="50 Words" onclick="selectSubTab(this)">50</div>
+  <div class="subtab" data-subcat="100 Words" onclick="selectSubTab(this)">100</div>
+</div>
+
+<div class="submenu-container" id="Time-submenu">
+  <div class="highlight" id="Time-highlight"></div>
+  <div class="subtab" data-subcat="15 Seconds" onclick="selectSubTab(this)">15s</div>
+  <div class="subtab" data-subcat="30 Seconds" onclick="selectSubTab(this)">30s</div>
+  <div class="subtab" data-subcat="60 Seconds" onclick="selectSubTab(this)">60s</div>
+  <div class="subtab" data-subcat="120 Seconds" onclick="selectSubTab(this)">120s</div>
+</div>
+
+<div id="leaderboards"></div>
+
+<script>
+let usernames = [];
+let leaderboardData = {};
+
+// ---------------- Load usernames ----------------
+async function loadUsernames(){
+    const res = await fetch("/api/usernames");
+    usernames = await res.json();
+}
+
+// ---------------- Best Attempt ----------------
+function bestAttempt(arr){
+    if(!arr || arr.length===0) return null;
+    return arr.filter(a=>a.wpm!=null).sort((a,b)=>b.wpm-a.wpm)[0]||null;
+}
+
+// ---------------- Main Tab ----------------
+function selectMainTab(el){
+    const highlight = document.getElementById("main-highlight");
+    const rect = el.getBoundingClientRect();
+    const parentRect = el.parentElement.getBoundingClientRect();
+    highlight.style.width = rect.width + "px";
+    highlight.style.left = (rect.left - parentRect.left) + "px";
+    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+    el.classList.add("active");
+    document.querySelectorAll(".submenu-container").forEach(s=>s.style.display="none");
+    let sub = document.getElementById(el.dataset.cat+"-submenu");
+    if(sub){
+        sub.style.display="inline-flex";
+        const first = sub.querySelector(".subtab");
+        if(first) selectSubTab(first);
+        return;
+    }
+    showCategory(el.dataset.cat);
+}
+
+// ---------------- Subtab ----------------
+function selectSubTab(el){
+    const parent = el.parentElement;
+    const highlight = parent.querySelector(".highlight");
+    const rect = el.getBoundingClientRect();
+    const parentRect = parent.getBoundingClientRect();
+    highlight.style.width = rect.width + "px";
+    highlight.style.left = (rect.left - parentRect.left) + "px";
+    parent.querySelectorAll(".subtab").forEach(st=>st.classList.remove("active"));
+    el.classList.add("active");
+    showCategory(el.dataset.subcat);
+}
+
+// ---------------- Show Category ----------------
+function showCategory(cat){
+    document.querySelectorAll('.category').forEach(c=>{
+        c.classList.remove('show');
+        c.style.display='none';
+    });
+    let div = document.getElementById(cat);
+    if(div){
+        div.style.display='block';
+        requestAnimationFrame(()=> div.classList.add('show'));
+    }
+}
+
+// ---------------- Render Leaderboard ----------------
+function renderLeaderboard(data){
+    leaderboardData = data;
+    const container = document.getElementById("leaderboards");
+    container.innerHTML="";
+    for(let cat in data){
+        let showAcc = cat !== "XP";
+        let html = `<div class='category' id='${cat}'><h2>${cat}</h2>
+                    <table>
+                        <tr>
+                            <th>#</th>
+                            <th>User</th>
+                            <th>${cat==="XP"?"XP":"WPM"}</th>`+
+                        (showAcc? "<th>Accuracy</th>":"")+`</tr>`;
+        data[cat].sort((a,b)=>b.wpm-a.wpm).forEach((e,i)=>{
+            let acc = showAcc && e.acc!==""?e.acc+"%": "";
+            let bio = e.bio?`<div class='bio'>${e.bio}</div>`:"";
+            html += `<tr>
+                        <td>${i+1}</td>
+                        <td>${e.username}${bio}</td>
+                        <td class='wpm'>${e.wpm}</td>`+
+                        (showAcc? `<td class='acc'>${acc}</td>`:"")+`</tr>`;
+        });
+        html+="</table></div>";
+        container.innerHTML+=html;
+    }
+    const defaultTab = document.querySelector('.tab[data-cat="Words"]');
+    if(defaultTab) selectMainTab(defaultTab);
+}
+
+// ---------------- Fetch Profile (Direct API) ----------------
+async function fetchProfile(username){
+    try{
+        let res = await fetch(`https://api.monkeytype.com/users/${username}/profile`);
+        let data = await res.json();
+        return data.data;
+    }catch{return null;}
+}
+
+// ---------------- Build Leaderboard ----------------
+async function buildLeaderboard(){
+    await loadUsernames();
+    const cached = await fetch("/api/leaderboard").then(r=>r.json());
+    if(cached.data) renderLeaderboard(cached.data);
+    if(!cached.stale) return;
+
+    // stale -> fetch fresh profiles in parallel
+    let freshData = {};
+    const cats = ["Overall","XP","10 Words","25 Words","50 Words","100 Words","15 Seconds","30 Seconds","60 Seconds","120 Seconds"];
+    cats.forEach(c => freshData[c] = []);
+
+    await Promise.all(usernames.map(async user=>{
+        let profile = await fetchProfile(user);
+        if(!profile) return;
+        const pb = profile.personalBests || {};
+        const details = profile.details || {};
+        let cat_results = {};
+
+        ["10","25","50","100"].forEach(k=>{
+            if(pb.words && pb.words[k]){
+                let best = bestAttempt(pb.words[k]);
+                if(best) cat_results[`${k} Words`] = best;
+            }
+        });
+        ["15","30","60","120"].forEach(k=>{
+            if(pb.time && pb.time[k]){
+                let best = bestAttempt(pb.time[k]);
+                if(best) cat_results[`${k} Seconds`] = best;
+            }
+        });
+
+        if(Object.keys(cat_results).length >= 3){
+            let avg_wpm = (Object.values(cat_results).reduce((a,b)=>a+b.wpm,0)/Object.keys(cat_results).length).toFixed(2);
+            let avg_acc = (Object.values(cat_results).reduce((a,b)=>a+b.acc,0)/Object.keys(cat_results).length).toFixed(2);
+            freshData["Overall"].push({username:profile.name||user,wpm:avg_wpm,acc:avg_acc,bio:details.bio||""});
+        }
+
+        for(let [k,v] of Object.entries(cat_results)){
+            freshData[k].push({username:profile.name||user,wpm:v.wpm,acc:v.acc,bio:details.bio||""});
+        }
+        freshData["XP"].push({username:profile.name||user,wpm:profile.xp||0,acc:"",bio:details.bio||""});
+    }));
+
+    renderLeaderboard(freshData);
+
+    // send to server cache
+    fetch("/api/leaderboard/update",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({data:freshData})
+    });
+}
+
+// ---------------- Init ----------------
+buildLeaderboard();
+
+const words = ["leaderboard", "typing practice", "website design", "thing ever made"];
+const prefix = "typenv - the best ";
+const h1 = document.getElementById('typewriter');
+const title = document.getElementsByTagName('title')[0];
+let wordIndex = 0;
+let letterIndex = 0;
+let isDeleting = false;
+
+function typeEffect() {
+  const currentWord = words[wordIndex];
+  let displayText = prefix + currentWord.substring(0, letterIndex);
+
+  h1.textContent = displayText;
+  title.textContent = "the best " + currentWord.substring(0, letterIndex);
+
+  if (!isDeleting && letterIndex <= currentWord.length) {
+    letterIndex++;
+    setTimeout(typeEffect, 100);
+  } else if (isDeleting && letterIndex > 0) {
+    letterIndex--;
+    setTimeout(typeEffect, 75);
+  } else if (!isDeleting) {
+    isDeleting = true;
+    setTimeout(typeEffect, 1000); // pause before deleting
+  } else {
+    isDeleting = false;
+    wordIndex = (wordIndex + 1) % words.length;
+    setTimeout(typeEffect, 400);
+  }
+}
+
+typeEffect();
+
+</script>
+</body>
+</html>
