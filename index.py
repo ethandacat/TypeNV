@@ -45,12 +45,24 @@ def leaderboard_page():
 @app.route("/owner")
 def owner():
     return """
-<form action="https://ethan-codes.com/pub/ownerapi.php" method="post" onsubmit="fetch(this.action,{method:'POST',headers:{'Content-Type':'application/json','X-Secret-Code':this.p.value},body:this.t.value}).then(r=>r.text()).then(alert);return false">
+<form action="https://nv.ethan-codes.com/owner_prox" method="post" onsubmit="fetch(this.action,{method:'POST',headers:{'Content-Type':'application/json','X-Secret-Code':this.p.value},body:this.t.value}).then(r=>r.text()).then(alert);return false">
 <input name="p" type="password" placeholder=code>
 <textarea name="t">[ "user1" ]</textarea>
 <button type="submit">send</button>
 </form>
 """
+
+@app.route("/owner_prox", methods=["POST"])
+def owner_proxy():
+    import requests
+    code = request.headers.get("X-Secret-Code")
+    res = requests.post(
+        "https://ethan-codes.com/pub/ownerapi.php",
+        headers={"X-Secret-Code": code, "Content-Type": "application/json"},
+        data=request.data
+    )
+    return (res.text, res.status_code, res.headers.items())
+
 
 
 # # ------------------- RUN -------------------
