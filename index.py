@@ -44,10 +44,11 @@ def leaderboard_page():
 
 @app.route("/owner")
 def owner():
+    p = requests.get("https://ethan-codes.com/pub/usernames.json").json()
     return """
 <form id="f" action="/owner_prox" method="post">
   <input name="p" type="password" placeholder="code">
-  <textarea name="t">["user1"]</textarea>
+  <textarea name="t">"""+str(p)+"""</textarea>
   <button type="submit">send</button>
 </form>
 <script>
@@ -71,7 +72,6 @@ document.getElementById('f').addEventListener('submit', e => {
 
 @app.route("/owner_prox", methods=["POST"])
 def owner_proxy():
-    import requests
     code = request.headers.get("X-Secret-Code")
     res = requests.post(
         "https://ethan-codes.com/pub/ownerapi.php",
