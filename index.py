@@ -45,12 +45,29 @@ def leaderboard_page():
 @app.route("/owner")
 def owner():
     return """
-<form action="https://nv.ethan-codes.com/owner_prox" method="post" onsubmit="fetch(this.action,{method:'POST',headers:{'Content-Type':'application/json','X-Secret-Code':this.p.value},body:this.t.value}).then(r=>r.text()).then(alert);return false">
-<input name="p" type="password" placeholder=code>
-<textarea name="t">[ "user1" ]</textarea>
-<button type="submit">send</button>
+<form id="f" action="/owner_prox" method="post">
+  <input name="p" type="password" placeholder="code">
+  <textarea name="t">["user1"]</textarea>
+  <button type="submit">send</button>
 </form>
+<script>
+document.getElementById('f').addEventListener('submit', e => {
+  e.preventDefault();
+  fetch(e.target.action, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Secret-Code': e.target.p.value
+    },
+    body: e.target.t.value
+  })
+  .then(r => r.text())
+  .then(alert)
+  .catch(err => alert('Fetch error: ' + err));
+});
+</script>
 """
+
 
 @app.route("/owner_prox", methods=["POST"])
 def owner_proxy():
