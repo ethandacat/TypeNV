@@ -119,6 +119,10 @@ tr:hover { background: var(--hover); }
   <div class="subtab" data-subcat="120 Seconds" onclick="selectSubTab(this)">120s</div>
 </div>
 
+<div id="refresh-leaderboard" class="tab tabs-container">
+    Refresh Leaderboard
+</div>
+
 <div id="leaderboards"></div>
 
 <script>
@@ -183,6 +187,14 @@ function showCategory(cat){
     }
 }
 
+// Utility
+function escapeHTML(str) {
+  return str.replace(/[&<>'"]/g, t => (
+    {'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[t]
+  ));
+}
+
+
 // ---------------- Render Leaderboard ----------------
 function renderLeaderboard(data){
     leaderboardData = data;
@@ -199,10 +211,10 @@ function renderLeaderboard(data){
                         (showAcc? "<th>Accuracy</th>":"")+`</tr>`;
         data[cat].sort((a,b)=>b.wpm-a.wpm).forEach((e,i)=>{
             let acc = showAcc && e.acc!==""?e.acc+"%": "";
-            let bio = e.bio?`<div class='bio'>${e.bio}</div>`:"";
+            let bio = e.bio?`<div class='bio'>${escapeHTML(e.bio)}</div>`:"";
             html += `<tr>
                         <td>${i+1}</td>
-                        <td>${e.username}${bio}</td>
+                        <td onclick="window.location.href='/profile/${encodeURIComponent(e.username)}'">${e.username}${bio}</td>
                         <td class='wpm'>${e.wpm}</td>`+
                         (showAcc? `<td class='acc'>${acc}</td>`:"")+`</tr>`;
         });
@@ -223,11 +235,11 @@ async function fetchProfile(username){
 }
 
 // ---------------- Build Leaderboard ----------------
-async function buildLeaderboard(){
+async function buildLeaderboard(ignoreStale = false){
     await loadUsernames();
     const cached = await fetch("/api/leaderboard").then(r=>r.json());
-    if(cached.data) renderLeaderboard(cached.data);
-    if(!cached.stale) return;
+    if(cached.data && !ignoreStale) renderLeaderboard(cached.data);
+    if(!cached.stale && !ignoreStale) return;
 
     // stale -> fetch fresh profiles in parallel
     let freshData = {};
@@ -274,13 +286,33 @@ async function buildLeaderboard(){
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({data:freshData})
     });
+
+    return freshData;
 }
+
 
 // ---------------- Init ----------------
 buildLeaderboard();
 
-const words = ["leaderboard", "typing practice", "website design", "thing ever made"];
-const prefix = "typenv - the best ";
+document.getElementById("refresh-leaderboard").addEventListener("click", async () => {
+    const btn = document.getElementById("refresh-leaderboard");
+    btn.disabled = true;
+    btn.textContent = "Refreshing...";
+
+    try {
+        await buildLeaderboard(true); // ignoreStale = true, forces fresh fetch
+    } catch (err) {
+        console.error("Leaderboard refresh failed:", err);
+        alert("Failed to refresh leaderboard. Check console.");
+    } finally {
+        btn.disabled = false;
+        btn.textContent = "🔄 Refresh Leaderboard";
+    }
+});
+
+
+const words = ["the best leaderboard", "the greatest typing practice", "the nicest animations", "yes this is made without ai"];
+const prefix = "typenv - ";
 const h1 = document.getElementById('typewriter');
 const title = document.getElementsByTagName('title')[0];
 let wordIndex = 0;
@@ -292,7 +324,7 @@ function typeEffect() {
   let displayText = prefix + currentWord.substring(0, letterIndex);
 
   h1.textContent = displayText;
-  title.textContent = "the best " + currentWord.substring(0, letterIndex);
+  title.textContent = currentWord.substring(0, letterIndex);
 
   if (!isDeleting && letterIndex <= currentWord.length) {
     letterIndex++;

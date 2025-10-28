@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{{USERNAME}} | Profile</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+    --bg: #181a1b;
+    --card: #232323;
+    --accent: #FFD700;
+    --text: #F6F6F6;
+    --subtext: #A8A8A8;
+    --hover: #292929;
+    --word: #8BE9FD;
+    --acc: #50FA7B;
+}
+body {
+    font-family: "Roboto Mono", monospace;
+    background: var(--bg);
+    color: var(--text);
+    padding: 2rem;
+    text-align: center;
+}
+h1 {
+    color: var(--accent);
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+h2 {
+    color: var(--accent);
+    margin: 1rem 0 0.5rem;
+}
+.bio {
+    font-size: 0.9rem;
+    color: var(--subtext);
+    margin-bottom: 1rem;
+}
+#profile-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+/* make rows flex and full width */
+.row {
+    display: flex;
+    gap: 1rem;
+    justify-content: stretch; /* stretch children to fill row */
+    width: 100%;
+}
+
+/* each category column stretches */
+.category-column, .row > .category-container {
+    flex: 1; /* take up as much space as possible */
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.rank-bar {
+    background:#232323;
+    height:25px;
+    border-radius:12px;
+    overflow:hidden;
+    width: 100%;
+    position: relative;
+}
+
+.rank-fill {
+    height:100%;
+    border-radius:12px;
+}
+
+.rank-tag {
+    font-weight:700;
+    font-size:1.1rem;
+    margin-bottom:0.3rem;
+    text-align:center;
+}
+
+/* optional: center titles */
+.category-container h3 {
+    text-align:center;
+    margin:0 0 0.3rem 0;
+}
+
+
+.rank-glow { 
+    animation: glow 1s infinite alternate;
+}
+
+/* glow inside the fill */
+.rank-fill.rank-glow {
+    box-shadow: inset 0 0 10px #FFD700, 0 0 10px #FFD700;
+}
+
+@keyframes glow {
+    0% { box-shadow: inset 0 0 5px #FFD700, 0 0 5px #FFD700; }
+    100% { box-shadow: inset 0 0 20px #FFD700, 0 0 20px #FFD700; }
+}
+</style>
+</head>
+<body>
+
+<h1 id="uname">{{USERNAME}}</h1>
+<p id="bio">Loading bio...</p>
+
+<div id="profile-grid">
+    <div class="row" id="row-top">
+        <div id="xp-container" class="category-column"></div>
+        <div id="overall-container" class="category-column"></div>
+    </div>
+    <div class="row" id="row-words"></div>
+    <div class="row" id="row-time"></div>
+</div>
+
+
+
+<p style="margin-top:1rem;"><a href="/" style="color:white; text-decoration:none;">← Back</a></p>
+
+<script>
+// ---------------- Utility ----------------
+function escapeHTML(str) {
+    return str.replace(/[&<>'"]/g, t => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[t]));
+}
+
+// ---------------- Fetch Leaderboard ----------------
+async function fetchProfile(username){
+    try {
+        const res = await fetch(`/api/leaderboard`);
+        const cache = await res.json();
+        if(!cache.data) return [];
+        let found = [];
+        for(const [cat, arr] of Object.entries(cache.data)){
+            for(const e of arr){
+                if(e.username.toLowerCase()===username.toLowerCase()){
+                    found.push({cat, ...e});
+                }
+            }
+        }
+        return found;
+    } catch { return []; }
+}
+
+async function computeOverallRank(){
+    const res = await fetch("/api/leaderboard");
+    const cache = await res.json();
+    if(!cache.data || !cache.data["Overall"]) return {};
+    const sorted = cache.data["Overall"].sort((a,b)=>b.wpm-a.wpm);
+    const rankMap = {};
+    sorted.forEach((user,i)=>{ rankMap[user.username.toLowerCase()]=i+1; });
+    return rankMap;
+}
+
+// ---------------- Rank Tag ----------------
+function rankTag(rank, total){
+    if(rank===1) return "🐐 THE GOAT";
+    if(rank===2||rank/total<=0.5) return "🥇 Gold";
+    if(rank/total <= 0.7) return "🥈 Silver";
+    else return "🥉 Bronze";
+    return `#${rank}`;
+}
+
+// ---------------- Create Bars ----------------
+function createBar(rank, total, value, cat, maxValue) {
+    const pct = Math.max(5, Math.round((value / maxValue) * 100));
+    const tag = rankTag(rank, total);
+
+    // color mapping
+    let color = "#50FA7B"; // default green
+    if(tag.includes("THE GOAT")) color="#FFD700";
+    else if(tag.includes("Gold")) color="#FFD700";
+    else if(tag.includes("Silver")) color="#C0C0C0";
+    else if(tag.includes("Bronze")) color="#CD7F32";
+
+    const glowClass = tag.includes("THE GOAT") ? "rank-glow" : "";
+
+    return `
+    <div class="category-container">
+        <div class="rank-tag ${glowClass}" style="color:${color}">
+            ${tag} - ${cat}
+        </div>
+        <div class="rank-bar">
+            <div class="rank-fill ${glowClass}" style="width:${pct}%; background:${color}"></div>
+        </div>
+        <p style="text-align:center; margin:0.2rem 0;">
+            ${cat === "XP" ? value + " XP" : value + " WPM"}
+        </p>
+    </div>`;
+}
+
+// ---------------- Build Profile ----------------
+async function buildProfile() {
+    const username = escapeHTML("{{USERNAME}}");
+    const bioEl = document.getElementById("bio");
+
+    const rowTopXP = document.getElementById("xp-container");
+    const rowTopOverall = document.getElementById("overall-container");
+    const rowWords = document.getElementById("row-words");
+    const rowTime = document.getElementById("row-time");
+
+    // fetch cache
+    const cache = await fetch("/api/leaderboard").then(r => r.json());
+    const data = cache.data || {};
+
+    // gather user's profile data
+    const profileData = [];
+    for (const [cat, arr] of Object.entries(data)) {
+        if (!arr.length) continue;
+
+        // get max value for percentile fill
+        const maxValue = Math.max(...arr.map(u => u.wpm));
+
+        // sort descending
+        const sorted = [...arr].sort((a,b) => b.wpm - a.wpm);
+        const idx = sorted.findIndex(u => u.username.toLowerCase() === username.toLowerCase());
+
+        if (idx !== -1) {
+            profileData.push({
+                cat,
+                wpm: sorted[idx].wpm,
+                acc: sorted[idx].acc || "",
+                rank: idx + 1,
+                total: sorted.length,
+                maxValue,
+                bio: sorted[idx].bio || ""
+            });
+        }
+    }
+
+    if(profileData.length === 0){
+        bioEl.textContent = "User not found.";
+        return;
+    }
+
+    bioEl.innerHTML = profileData[0].bio || "No bio yet.";
+
+    // render bars using createBar
+    profileData.forEach(d => {
+        const barHTML = createBar(d.rank, d.total, d.wpm, d.cat, d.maxValue);
+
+        if(d.cat === "XP") rowTopXP.innerHTML = barHTML;
+        else if(d.cat === "Overall") rowTopOverall.innerHTML = barHTML;
+        else if(d.cat.includes("Words")) rowWords.innerHTML += barHTML;
+        else if(d.cat.includes("Seconds")) rowTime.innerHTML += barHTML;
+    });
+}
+
+// ---------------- Init ----------------
+buildProfile();
+</script>
+
+</body>
+</html>

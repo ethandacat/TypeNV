@@ -1,5 +1,5 @@
 from flask import Flask, request, Response, jsonify
-import requests, time
+import requests, time, html
 
 app = Flask(__name__)
 
@@ -40,7 +40,14 @@ def update_cache():
 # ------------------- HTML -------------------
 @app.route("/")
 def leaderboard_page():
-    return Response(open("leaderboard.html").read(), mimetype="text/html")
+    return Response(open("leaderboard.html", encoding="utf-8").read(), mimetype="text/html")
+
+@app.route("/profile/<username>")
+def profile(username):
+    with open("profile.html", encoding="utf-8") as f:
+        html_content = f.read()
+    html_content = html_content.replace("{{USERNAME}}", html.escape(username))
+    return Response(html_content, mimetype="text/html")
 
 @app.route("/owner")
 def owner():
@@ -78,10 +85,9 @@ def owner_proxy():
         headers={"X-Secret-Code": code, "Content-Type": "application/json"},
         data=request.data
     )
-    return (res.text, res.status_code, res.headers.items())
+    return Response(res.text, status=res.status_code, headers=dict(res.headers))
 
 
-
-# # ------------------- RUN -------------------
-# if __name__ == "__main__":
-#     app.run(debug=True, port=8000)
+# ------------------- RUN -------------------
+if __name__ == "__main__":
+    app.run(debug=True, port=8000)
